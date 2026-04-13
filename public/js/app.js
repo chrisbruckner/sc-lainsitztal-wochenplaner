@@ -351,44 +351,56 @@ async function syncWebcalGames(isAutoSync = false) {
   }
 
   try {
+    console.log('🔄 Syncing games from /api/games endpoint...');
     const response = await fetch('/api/games');
-    if (response.ok) {
-      const data = await response.json();
-      if (data.games && data.games.length > 0) {
-        // Merge with existing games
-        const newGames = data.games.map(g => {
-          const gameDate = new Date(g.date + 'T00:00:00');
-          return {
-            id: g.id,
-            wo: calculateWeekOffset(gameDate),
-            team: g.team,
-            day: gameDate.getDay() === 0 ? 6 : gameDate.getDay() - 1,
-            time: g.time,
-            opp: g.opponent,
-            loc: g.location,
-            type: g.type
-          };
-        });
-        
-        // Remove old webcal games (webcal games haben String IDs mit '-')
-        games = games.filter(g => typeof g.id !== 'string' || !g.id.includes('-'));
-        
-        // Add new games
-        games.push(...newGames);
-        saveGames();
-        render();
-        if (!isAutoSync) {
-          showFeedback(`✓ ${data.count} Spiele synchronisiert!`);
-        }
-      } else if (!isAutoSync) {
-        showFeedback('ℹ Keine Spiele in Webcals gefunden', false);
+    
+    console.log('📋 Response status:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('📊 API Response:', data);
+    
+    if (data.games && data.games.length > 0) {
+      // Merge with existing games
+      const newGames = data.games.map(g => {
+        const gameDate = new Date(g.date + 'T00:00:00');
+        return {
+          id: g.id,
+          wo: calculateWeekOffset(gameDate),
+          team: g.team,
+          day: gameDate.getDay() === 0 ? 6 : gameDate.getDay() - 1,
+          time: g.time,
+          opp: g.opponent,
+          loc: g.location,
+          type: g.type
+        };
+      });
+      
+      // Remove old webcal games (webcal games haben String IDs mit '-')
+      games = games.filter(g => typeof g.id !== 'string' || !g.id.includes('-'));
+      
+      // Add new games
+      games.push(...newGames);
+      saveGames();
+      render();
+      if (!isAutoSync) {
+        showFeedback(`✓ ${data.count} Spiele synchronisiert!`);
+      }
+      console.log(`✅ Successfully synced ${data.count} games`);
+    } else {
+      console.warn('⚠️ No games received from API:', data);
+      if (!isAutoSync) {
+        showFeedback('ℹ Keine Spiele in Webcals gefunden (Server antwortet korrekt, aber Webcal-URLs liefern keine Daten)', false);
       }
     }
   } catch (err) {
+    console.error('❌ Sync Error:', err);
     if (!isAutoSync) {
-      showFeedback(`❌ Webcal Fehler: ${err.message}`, true);
+      showFeedback(`❌ Sync Fehler: ${err.message}`, true);
     }
-    console.log('Webcal Sync fehlgeschlagen:', err);
   } finally {
     if (syncBtn && !isAutoSync) {
       syncBtn.textContent = '🔄 Spiele aktualisieren';

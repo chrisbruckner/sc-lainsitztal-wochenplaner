@@ -125,13 +125,19 @@ async function loadGamesFromWebcals(startDate, endDate) {
         continue;
       }
       
-      // Fetch from webcal
+      // Fetch from webcal with detailed error logging
+      console.log(`🔄 Fetching webcal for ${team}...`);
       const response = await axios.get(webcalUrl, {
-        timeout: 10000,
+        timeout: 15000,
         headers: {
-          'User-Agent': 'SC-Lainsitztal-Wochenplaner/1.0'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
       });
+      
+      if (!response.data) {
+        console.warn(`⚠ Empty response from webcal for ${team}`);
+        continue;
+      }
       
       const games = parseICalGames(response.data, team);
       gameCache[team] = games;
@@ -140,7 +146,13 @@ async function loadGamesFromWebcals(startDate, endDate) {
       allGames.push(...games);
       console.log(`✓ Loaded ${games.length} games for ${team} from webcal`);
     } catch (error) {
-      console.warn(`⚠ Error fetching webcal for ${team}:`, error.message);
+      console.error(`❌ ERROR fetching webcal for ${team}:`);
+      console.error(`   URL: ${webcalUrl}`);
+      console.error(`   Error: ${error.message}`);
+      if (error.response) {
+        console.error(`   Status: ${error.response.status}`);
+        console.error(`   Response: ${error.response.data?.substring?.(0, 200) || 'N/A'}`);
+      }
     }
   }
   
@@ -154,8 +166,12 @@ app.get('/api/games', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
+    console.log(`📌 API Request: /api/games (startDate: ${startDate}, endDate: ${endDate})`);
+    
     // Load from webcals
     const games = await loadGamesFromWebcals(startDate, endDate);
+    
+    console.log(`📊 Total games loaded: ${games.length}`);
     
     // Convert to frontend format
     const formattedGames = games.map(g => {
@@ -176,17 +192,21 @@ app.get('/api/games', async (req, res) => {
       };
     });
     
+    console.log(`✅ Returning ${formattedGames.length} games to frontend`);
+    
     res.json({
       success: true,
       count: formattedGames.length,
       games: formattedGames,
-      source: 'webcal'
+      source: 'webcal',
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('❌ API Error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });
